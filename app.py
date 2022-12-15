@@ -5,8 +5,8 @@ from flask import Flask, render_template, request, flash, redirect, session, g
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
-from forms import UserAddForm, LoginForm, MessageForm
-from models import db, connect_db, User, Message
+from forms import UserAddForm, LoginForm, MessageForm, CSRFOnlyForm, EditForm
+from models import db, connect_db, User, Message, Follows
 
 load_dotenv()
 
@@ -40,6 +40,16 @@ def add_user_to_g():
 
     else:
         g.user = None
+
+@app.before_request
+def add_csrf_form_to_g():
+    """If we're logged in, add csrf_form to Flask Global"""
+
+    if CURR_USER_KEY in session: # ? Should this check be in here?
+        g.csrf_form = CSRFOnlyForm()
+
+    else:
+        g.csrf_form = None
 
 
 def do_login(user):
@@ -118,10 +128,26 @@ def login():
 def logout():
     """Handle logout of user and redirect to homepage."""
 
-    form = g.csrf_form
-
     # IMPLEMENT THIS AND FIX BUG
     # DO NOT CHANGE METHOD ON ROUTE
+
+    # // TODO: CREATE CSRF FORM IN FORMS.PY
+    # // TODO: SET G KEY TO CSRF_FORM
+    # // TODO: CHECK TO ADD HIDEDEN FORM TAG IN NAV BAR FOR LOGOUT AND MAKE AS FORM POST METHOD
+
+    ## protect route
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    form = g.csrf_form
+
+    if form.validate_on_submit():
+        # // TODO: pop user from session
+        flash("You have successfully logged out.", 'info')
+        do_logout()
+
+    return redirect('/')
 
 
 ##############################################################################
@@ -225,7 +251,38 @@ def stop_following(follow_id):
 def profile():
     """Update profile for current user."""
 
-    # IMPLEMENT THIS
+    # // TODO: IMPLEMENT THIS
+
+    # PROTECT ROUTE
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    # CREATE FORM IN FORMS.PY
+    form = EditForm(obj=g.user)
+
+    # REDIRECT TO DETAIL PAGE ON SUCCESS
+    if form.validate_on_submit():
+
+        password = form.password.data
+
+        if User.authenticate(username=g.user.username, password=password):
+            #pull info from g.user
+            g.user.username = form.data.get("username", g.user.username)
+            g.user.email = form.data.get("email", g.user.email)
+            g.user.image_url = form.data.get("image_url", g.user.image_url)
+            g.user.header_image_url = form.data.get("header_image_url", g.user.header_image_url)
+            g.user.bio = form.data.get("bio", g.user.bio)
+            # g.user.bio = form.data.get("bio", g.user.bio)
+            # password
+
+            db.session.commit()
+            return redirect(f"/users/{g.user.id}")
+        else :
+            flash("Password is not correct. Please try again.")
+
+    return render_template('users/edit.html', form=form)
+
 
 
 @app.post('/users/delete')
@@ -316,9 +373,13 @@ def homepage():
     - logged in: 100 most recent messages of followed_users
     """
 
+    breakpoint()
     if g.user:
+        # TODO: RE-START HERE. FIGURE OUT HOW TO FILTER FOR ONLY MESSAGES OF USERS THAT THE USER FOLLOWS.
+        # ALL MESSAGES WHERE USER ID == USER.FOLLOWEES
         messages = (Message
                     .query
+                    .filter(Follows.user_being_followed_id == g.user.id)
                     .order_by(Message.timestamp.desc())
                     .limit(100)
                     .all())

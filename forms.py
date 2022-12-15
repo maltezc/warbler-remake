@@ -23,3 +23,23 @@ class LoginForm(FlaskForm):
 
     username = StringField('Username', validators=[DataRequired()])
     password = PasswordField('Password', validators=[Length(min=6)])
+
+
+
+
+class EditForm(FlaskForm):
+    """Edit form"""
+
+    # .get(value) not .get[value]
+    # lines cannot have ',' at the end of the line.
+    username = StringField('Username', validators=[DataRequired()])
+    email = StringField('E-mail', validators=[DataRequired(), Email()])
+    image_url = StringField('(Optional) Image URL')
+    header_image_url = StringField("(Optional)Header Image URL")
+    bio = TextAreaField('Bio')
+    password = PasswordField('Password', validators=[Length(min=6)])
+
+
+class CSRFOnlyForm(FlaskForm):
+    """ CSRF only form. """
+
